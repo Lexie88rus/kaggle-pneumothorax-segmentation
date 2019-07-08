@@ -20,12 +20,17 @@ import torch.nn.functional as F
 from torchvision import datasets, transforms, models
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.functional as TF
+from torch.utils.data.sampler import SubsetRandomSampler
+from torch.autograd import Variable
+
+# Import utils for submission
+from skimage.morphology import binary_opening, disk, label
 
 # Import rle utils
 from mask_functions import rle2mask
 
 # Import models
-from simple_unet import SimpleUNet
+from simple_unet import UNet
 
 # Data loading utility
 def load_data(datafilepath = '../siim-train-test/'):
@@ -52,7 +57,7 @@ class PneumothoraxDataset(Dataset):
     The dataset for pneumothorax segmentation.
     '''
 
-    def __init__(self, fns, df_masks, transform=True):
+    def __init__(self, fns, df_masks, transform=True, size = (224, 224), mode = 'train'):
         '''
         INPUT:
             fns - glob containing the images
@@ -62,47 +67,9 @@ class PneumothoraxDataset(Dataset):
         self.labels_frame = df_masks
         self.fns = fns
         self.transform = transform
-        self.transforms = transforms.Compose([transforms.ToTensor()])
-
-    def apply_transform(self, image, mask):
-        '''
-        Apply transforms to the image and mask.
-        INPUT:
-            image - original PIL image
-            mask - original PIL image containing mask
-        OUTPUT:
-            image - tensor image after transform
-            mask - tensor image containing mask after transform
-        '''
-
-        # Apply transformations if transform is enabled
-        if (self.transform):
-            # Resize
-            resize = transforms.Resize(size=(1024, 1024))
-            image = resize(image)
-            mask = resize(mask)
-
-            # Random crop
-            i, j, h, w = transforms.RandomCrop.get_params(
-                image, output_size=(284, 284))
-            image = TF.crop(image, i, j, h, w)
-            mask = TF.crop(mask, i, j, h, w)
-
-            # Random horizontal flipping
-            if random.random() > 0.5:
-                image = TF.hflip(image)
-                mask = TF.hflip(mask)
-
-            # Random vertical flipping
-            if random.random() > 0.5:
-                image = TF.vflip(image)
-                mask = TF.vflip(mask)
-
-        # Transform to tensor
-        image = TF.to_tensor(image)
-        mask = TF.to_tensor(mask)
-
-        return image, mask
+        self.size = size
+        self.transforms = transforms.Compose([transforms.Resize(self.size), transforms.ToTensor()])
+        self.mode = mode
 
     def __len__(self):
         return len(self.fns)
@@ -127,6 +94,12 @@ class PneumothoraxDataset(Dataset):
         dataset = pydicom.read_file(self.fns[idx])
         np_image = np.expand_dims(dataset.pixel_array, axis=2)
 
+        # if validation then return filename instead of mask
+        if self.mode == 'validation':
+            image = Image.fromarray(np_image.reshape(im_height, im_width) , 'L')
+            image = self.transforms(image)
+            return [image, self.fns[idx].split('/')[-1][:-4]]
+
         # load mask
         try:
             # no pneumothorax
@@ -142,37 +115,38 @@ class PneumothoraxDataset(Dataset):
                         np_mask =  np_mask + np.expand_dims(rle2mask(x, 1024, 1024), axis=2)
         except KeyError:
             # couldn't find mask in dataframe
-            print(f"Key {self.fns[idx].split('/')[-1][:-4]} without mask, assuming healthy patient.")
+            #print(f"Key {self.fns[idx].split('/')[-1][:-4]} without mask, assuming healthy patient.")
             np_mask = np.zeros((im_height, im_width, 1), dtype=np.bool) # Assume missing masks are empty masks.
 
         # convert to PIL
         image = Image.fromarray(np_image.reshape(im_height, im_width) , 'L')
         mask = Image.fromarray(np_mask.reshape(im_height, im_width).astype(np.uint8) , 'L')
 
-        # apply transformations
-        self.apply_transform(image, mask)
+        image = self.transforms(image)
+        mask = self.transforms(mask)
 
-        return [self.transforms(image), self.transforms(mask)]
+        mask = torch.from_numpy(np.array(mask, dtype=np.int64))
+        mask = np.clip(mask, 0, 1)
 
-def train_step(model, inputs, labels, optimizer, criterion):
-    optimizer.zero_grad()
-    # forward + backward + optimize
-    outputs = model(inputs)
-    # outputs.shape =(batch_size, n_classes, img_cols, img_rows)
-    outputs = outputs.permute(0, 2, 3, 1)
-    # outputs.shape =(batch_size, img_cols, img_rows, n_classes)
-    outputs = outputs.resize(batch_size*width_out*height_out, 2)
-    labels = labels.resize(batch_size*width_out*height_out)
-    loss = criterion(outputs, labels)
-    loss.backward()
-    optimizer.step()
-    return loss
+        return image, mask
 
-def train(model, device, trainloader, testloader, optimizer, criterion, epochs):
+# Training the model
+def train(model, device, trainloader, testloader, optimizer, criterion, epochs = 10):
+    '''
+    Function to train the model:
+    INPUT:
+        model - the model to train
+        device - cuda or cpu
+        trainloader - loader for the training data
+        testloader - loader for testing data
+        optimizer - optimizer (SGD or Adam for example)
+        criterion - initialized loss function
+        epochs - the number of epochs
+    '''
     model.to(device)
     steps = 0
     running_loss = 0
-    print_every = 1
+    print_every = 100
 
     for epoch in range(epochs):
         for inputs, labels in trainloader:
@@ -184,7 +158,7 @@ def train(model, device, trainloader, testloader, optimizer, criterion, epochs):
             optimizer.zero_grad()
 
             outputs = model.forward(inputs)
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels.reshape(-1, 224, 224).long())
             loss.backward()
             optimizer.step()
 
@@ -198,45 +172,69 @@ def train(model, device, trainloader, testloader, optimizer, criterion, epochs):
                     for inputs, labels in testloader:
                         inputs, labels = inputs.to(device), labels.to(device)
                         outputs = model.forward(inputs)
-                        batch_loss = criterion(outputs, labels)
+                        batch_loss = criterion(outputs, labels.reshape(-1, 224, 224).long())
                         test_loss += batch_loss.item()
 
                 print(f"Epoch {epoch+1}/{epochs}.. "
                       f"Train loss: {running_loss/print_every:.3f}.. "
                       f"Test loss: {test_loss/len(testloader):.3f}.. ")
+
                 running_loss = 0
+
                 model.train()
 
 def main():
     '''
     Script entry point.
+    TODO: add script comand line parameters.
     '''
     # Load data
     print('Loading data: \n')
     train_fns, test_fns, df_masks = load_data()
 
     # Training presets
-    batch_size = 32
+    batch_size = 16
     epochs = 10
     learning_rate = 0.01
+    test_split = .2
 
-    width = 284
-    height = 284
-    width_out = 196
-    height_out = 196
+    # Set the size of images
+    original_size = 1024
+    width = 224
+    height = 224
 
-    # Create dataset and data loader
+    # Create the dataset and data loaders
     print('Preparing the dataset: \n')
-    train_ds = PneumothoraxDataset(train_fns, df_masks, transform=True)
-    trainloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+    train_ds = PneumothoraxDataset(train_fns, df_masks, transform=True, size = (height, width), mode = 'train')
 
-    test_ds = PneumothoraxDataset(test_fns, df_masks, transform=False)
-    testloader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0)
+    # Creating data indices for train and test splits with SubsetRandomSampler
+    dataset_size = len(train_ds)
+    indices = list(range(dataset_size))
+    split = int(np.floor(test_split * dataset_size))
+    np.random.seed(42)
+    np.random.shuffle(indices)
+    train_indices, test_indices = indices[split:], indices[:split]
+
+    train_sampler = SubsetRandomSampler(train_indices)
+    test_sampler = SubsetRandomSampler(test_indices)
+
+    trainloader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler, num_workers=4)
+    testloader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, sampler=test_sampler, num_workers=4)
+
+    valid_ds = PneumothoraxDataset(test_fns, None, transform=False, size = (height, width), mode = 'validation')
+    validloader = DataLoader(valid_ds, batch_size=8, shuffle=False, num_workers=1)
+
+    torch.cuda.empty_cache()
 
     # Prepare for training: initialize model, loss function, optimizer
-    model = SimpleUNet(in_channel=1,out_channel=2)
+    class param:
+        unet_depth = 5
+        unet_start_filters = 8
+    model = UNet(2, depth=param.unet_depth, start_filts=param.unet_start_filters, merge_mode='concat')
+
+    # Initialize loss function and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.99)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # Setup device for training
     device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
@@ -245,11 +243,30 @@ def main():
     print('Train the model: \n')
     train(model, device, trainloader, testloader, optimizer, criterion, epochs)
 
-    # Save the models
+    # Save the model
     print('Save the model: \n')
     filepath = 'simple_unet.pth'
     checkpoint = {'state_dict': model.state_dict()}
     torch.save(checkpoint, filepath)
+
+    # Create submission file
+    submission = {'ImageId': [], 'EncodedPixels': []}
+
+    model.eval()
+    torch.cuda.empty_cache()
+
+    for X, fns in validloader:
+        X = Variable(X).cuda()
+        output = model(X)
+        for i, fname in enumerate(fns):
+            mask = torch.sigmoid(output[i, 0]).data.cpu().numpy()
+            mask = binary_opening(mask > 0.001, disk(2))
+
+            im = Image.fromarray((mask*255).astype(np.uint8)).resize((original_size,original_size))
+            im = np.asarray(im)
+
+            submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
+            submission['ImageId'].append(fname)
 
 if __name__ == '__main__':
     main()
