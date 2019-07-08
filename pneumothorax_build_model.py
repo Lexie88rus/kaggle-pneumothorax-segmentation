@@ -8,6 +8,7 @@ import pandas as pd
 from glob import glob
 import pydicom
 import random
+import time
 
 # import image manipulation
 from PIL import Image
@@ -50,6 +51,22 @@ def load_data(datafilepath = '../siim-train-test/'):
     df_masks = pd.read_csv(datafilepath + 'train-rle.csv', index_col='ImageId')
 
     return train_fns, test_fns, df_masks
+
+def load_data_augmented(datafilepath = '../siim-train-test-augmented/'):
+    '''
+    Function to load the dataset.
+    INPUT:
+        datafilepath - path to directory containing the augmented dataset.
+    OUTPUT:
+        train_fns - train augmented dataset
+        df_masks - pandas dataframe containing masks for augmented train dataset
+    '''
+    # Load full training and test sets
+    train_fns = sorted(glob(datafilepath + 'img/' + '*.png'))
+
+    train_fns_masks = sorted(glob(datafilepath + 'mask/' + '*.png'))
+
+    return train_fns, train_fns_masks
 
 # Define the dataset
 class PneumothoraxDataset(Dataset):
@@ -130,6 +147,66 @@ class PneumothoraxDataset(Dataset):
 
         return image, mask
 
+# Define the dataset
+class AugmentedPneumothoraxDataset(Dataset):
+    '''
+    The dataset for pneumothorax segmentation.
+    '''
+
+    def __init__(self, fns, fns_masks, transform=True, size = (224, 224), mode = 'train'):
+        '''
+        INPUT:
+            fns - glob containing the images
+            df_masks - dataframe containing image masks
+            transform (optional) - enable transforms for the images
+        '''
+        self.fns = fns
+        self.fns = fns_masks
+        self.transform = transform
+        self.size = size
+        self.transforms = transforms.Compose([transforms.Resize(self.size), transforms.ToTensor()])
+        self.mode = mode
+
+    def __len__(self):
+        return len(self.fns)
+
+    def __getitem__(self, idx):
+        '''
+        Function to get items from dataset by idx.
+        INPUT:
+            idx - id of the image in the dataset
+        '''
+        # image height and width
+        im_height = 1024
+        im_width = 1024
+        # image channels
+        im_chan = 1
+
+        # get train image and mask
+        np_image = np.zeros((im_height, im_width, im_chan), dtype=np.uint8)
+        np_mask = np.zeros((im_height, im_width, 1), dtype=np.bool)
+
+        # read png file with image
+        image = Image.open(self.fns[idx])
+        image = image.convert('L')
+
+        # if validation then return filename instead of mask
+        if self.mode == 'validation':
+            image = self.transforms(image)
+            return [image, self.fns[idx].split('/')[-1][:-4]]
+
+        # load mask
+        mask = Image.open(self.fns_masks[idx])
+        mask = mask.convert('L')
+
+        image = self.transforms(image)
+        mask = self.transforms(mask)
+
+        mask = torch.from_numpy(np.array(mask, dtype=np.int64))
+        mask = np.clip(mask, 0, 1)
+
+        return image, mask
+
 # Training the model
 def train(model, device, trainloader, testloader, optimizer, criterion, epochs = 10):
     '''
@@ -191,6 +268,7 @@ def main():
     # Load data
     print('Loading data: \n')
     train_fns, test_fns, df_masks = load_data()
+    train_fns_aug, train_fns_masks_aug = load_data_augmented()
 
     # Training presets
     batch_size = 16
@@ -205,7 +283,8 @@ def main():
 
     # Create the dataset and data loaders
     print('Preparing the dataset: \n')
-    train_ds = PneumothoraxDataset(train_fns, df_masks, transform=True, size = (height, width), mode = 'train')
+    #train_ds = PneumothoraxDataset(train_fns, df_masks, transform=True, size = (height, width), mode = 'train')
+    train_ds = AugmentedPneumothoraxDataset(train_fns_aug, train_fns_masks_aug, transform=True, size = (height, width), mode = 'train')
 
     # Creating data indices for train and test splits with SubsetRandomSampler
     dataset_size = len(train_ds)
