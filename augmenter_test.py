@@ -12,6 +12,7 @@ import time
 
 # import image manipulation
 from PIL import Image
+import Augmentor
 
 # Import PyTorch
 import torch
@@ -153,18 +154,31 @@ class PneumothoraxDataset(Dataset):
         # apply optional transforms (random rotation for the training set)
         if self.transform:
             # apply random rotation
-            angle = random.uniform(-5, 5)
-            image = TF.rotate(image, angle)
-            mask = TF.rotate(mask, angle)
+
+            p = Augmentor.DataPipeline([[np.array(image), np.array(mask)]])
+            p.rotate(0.7, max_left_rotation=3, max_right_rotation=3)
+            p.zoom_random(probability=0.3, percentage_area=0.95)
+            images_aug = p.sample(1)
+
+            image = Image.fromarray(images_aug[0][0].reshape(im_height, im_width, 3).astype(np.uint8) , 'RGB')
+            mask = Image.fromarray(images_aug[0][1].reshape(im_height, im_width).astype(np.uint8) , 'L')
 
             # apply random horizontal flip
-            #if (angle > 0):
-            #    image = TF.hflip(image)
-            #    mask = TF.hflip(mask)
+            flip = random.uniform(0, 1)
+            if (flip > 0.5):
+                image = TF.hflip(image)
+                mask = TF.hflip(mask)
 
         # apply required transforms normalization, reshape and convert to tensor
-        image = self.transforms_image(image)
-        mask = self.transforms_mask(mask)
+        image = TF.resize(image, self.size)
+        mask = TF.resize(mask, self.size)
+
+        # convert image to tensors and normalize
+        image = TF.to_tensor(image)
+        image = TF.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+        ts = time.time()
+        TF.to_pil_image(image).save('image' + str(ts) + '.png')
 
         # convert to tensor and clip mask
         mask = torch.from_numpy(np.array(mask, dtype=np.int64))
@@ -235,8 +249,8 @@ def main():
     train_fns, test_fns, df_masks, files_list = load_data()
 
     # Training presets
-    batch_size = 16
-    epochs = 10
+    batch_size = 8
+    epochs = 1
     learning_rate = 0.01
     test_split = .2
 
