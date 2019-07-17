@@ -13,6 +13,7 @@ from shutil import copy, copyfile, copy2
 # import image manipulation
 from PIL import Image
 import SimpleITK as sitk
+import Augmentor
 
 # Import PyTorch
 import torch
@@ -142,11 +143,19 @@ def create_augmented_dataset(train_fns, test_fns, df_masks, filepath = '../siim-
                 if random.uniform(0, 1) < (pneumothorax_augmented_examples / len(train_fns)):
 
                     # augment image and masks
-                    angle = random.uniform(0, 10)
-                    new_image_id = fname.split('/')[-1][:-4] + '_rotated_' + str(angle)
+                    p = Augmentor.DataPipeline([[np.array(image), np.array(mask)]])
+                    p.rotate(0.7, max_left_rotation=3, max_right_rotation=3)
+                    p.zoom_random(probability=0.3, percentage_area=0.95)
+                    images_aug = p.sample(1)
 
-                    image = TF.rotate(image, angle)
-                    mask = TF.rotate(mask, angle)
+                    image = Image.fromarray(images_aug[0][0].reshape(im_height, im_width, 3).astype(np.uint8) , 'L')
+                    mask = Image.fromarray(images_aug[0][1].reshape(im_height, im_width).astype(np.uint8) , 'L')
+
+                    # apply random horizontal flip
+                    flip = random.uniform(0, 1)
+                    if (flip > 0.5):
+                        image = TF.hflip(image)
+                        mask = TF.hflip(mask)
 
                     # Save augmented image as png and mask as png
                     image.save(filepath_img + new_image_id + '.png')
