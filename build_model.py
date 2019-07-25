@@ -39,7 +39,7 @@ from submission import determine_threshold, make_submission
 # Import model saving
 from save_model import save_model
 
-def build_model(img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler):
+def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler):
     # create data loaders
     trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
     test_split = test_split,
@@ -47,7 +47,8 @@ def build_model(img_size, channels, test_split, batch_size, workers, model_arch,
     num_workers = workers)
 
     # setup the device
-    device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+    if device == None:
+        device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 
     # initialize model
     if model_arch == 'UNet':
@@ -94,7 +95,7 @@ def build_model(img_size, channels, test_split, batch_size, workers, model_arch,
     filename = 'submission_' + model_arch + '_lr' + str(learning_rate) + '_' + str(epochs) + '.csv'
     print('Generating submission to ' + filename + '\n')
     thresholds, ious, index_max, threshold_max = determine_threshold(model, device, testloader, image_size = (img_size, img_size))
-    make_submission(filename, model, validloader, image_size = (img_size, img_size), threshold = threshold_max, original_size = 1024)
+    make_submission(filename, device, model, validloader, image_size = (img_size, img_size), threshold = threshold_max, original_size = 1024)
 
     # save the model
     save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = 'models_checkpoints')

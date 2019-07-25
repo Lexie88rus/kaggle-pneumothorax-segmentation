@@ -3,17 +3,19 @@ Script to create submission.
 '''
 # Imports
 import numpy as np
+import pandas as pd
 import torch
 from torch.autograd import Variable
 import tqdm
 
 # import image utilities
 from skimage.morphology import binary_opening, disk, label
+from PIL import Image
 
 # import mask utilities
 from mask_functions import mask2rle
 
-def make_submission(filename, model, validloader, image_size, threshold = 0.9, original_size = 1024):
+def make_submission(filename, device, model, validloader, image_size, threshold = 0.9, original_size = 1024):
     '''
     Function to create submission.csv file.
     INPUT:
@@ -33,7 +35,7 @@ def make_submission(filename, model, validloader, image_size, threshold = 0.9, o
     im_height = image_size[1]
 
     for X, fns in validloader:
-        X = Variable(X).cuda()
+        X = Variable(X).to(device)
         output = model(X)
 
         X_flipped = torch.flip(X, dims = (3,))

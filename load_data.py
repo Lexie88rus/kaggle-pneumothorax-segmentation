@@ -17,7 +17,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from dataset import PneumothoraxDataset
 
 # Data loading utility
-def load_data(datafilepath = '../siim-train-test/', healthy_num = 2000):
+def load_data(datafilepath = './', healthy_num = 2000):
     '''
     Function to load the dataset.
     INPUT:
@@ -88,6 +88,6 @@ def build_dataloaders(image_size, channels, test_split = .1, batch_size = 16, nu
     testloader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, sampler=test_sampler, num_workers=num_workers)
 
     valid_ds = PneumothoraxDataset(test_fns, None, None, transform=False, size = (height, width), mode = 'validation', channels = channels)
-    validloader = DataLoader(valid_ds, batch_size=8, shuffle=False, num_workers=1)
+    validloader = DataLoader(valid_ds, batch_size=8, shuffle=False, num_workers=num_workers)
 
     return trainloader, testloader, validloader

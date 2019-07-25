@@ -24,7 +24,6 @@ from albumentations.pytorch import ToTensor
 # Import PyTorch
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms.functional as TF
 from torchvision import transforms
 
 # import mask utilities
@@ -51,7 +50,7 @@ class PneumothoraxDataset(Dataset):
         self.fns = fns
         self.transform = transform
         self.size = size
-        
+
         self.transforms_mask = transforms.Compose([transforms.Resize(self.size), transforms.ToTensor()])
 
         if channels == 3:
