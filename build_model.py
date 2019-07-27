@@ -26,6 +26,8 @@ from models.phalanx import Res34Unetv4, Res34Unetv3, Res34Unetv5
 # Import losses
 from losses import BCEDiceLoss
 from lovasz_loss import LovaszSoftmaxLoss
+from jaccard_loss import JaccardLoss
+from soft_IoU_loss import mIoULoss
 
 # Import metrics
 from metrics import iou_score
@@ -39,7 +41,7 @@ from submission import determine_threshold, make_submission
 # Import model saving
 from save_model import save_model
 
-def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler):
+def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss'):
     # create data loaders
     trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
     test_split = test_split,
@@ -81,10 +83,17 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
     # setup criterion, optimizer and metrics
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    if model_arch == 'Res34Unetv4' or model_arch == 'Res34Unetv3' or model_arch == 'AlbuNet':
-        criterion = LovaszSoftmaxLoss()
-    else:
+    if loss == 'BCEDiceLoss':
         criterion = BCEDiceLoss()
+
+    if loss == 'LovaszSoftmaxLoss':
+        criterion = LovaszSoftmaxLoss()
+
+    if loss == 'JaccardLoss':
+        criterion = JaccardLoss()
+
+    if loss == 'mIoULoss':
+        criterion = mIoULoss()
 
     metric = iou_score
 
@@ -123,6 +132,10 @@ def main():
     choices=['UNet', 'UNet11', 'AlbuNet', 'UNet16', 'NestedUNet', 'Unet_2D', 'Res34Unetv4', 'Res34Unetv3', 'Res34Unetv5'],
     help='Model architecture.')
 
+    parser.add_argument('--loss', action='store', default = 'BCEDiceLoss',
+    choices=['BCEDiceLoss', 'LovaszSoftmaxLoss', 'Jaccard', 'mIoULoss'],
+    help='Model architecture.')
+
     parser.add_argument('--optimizer', action='store', default = 'SGD',
     choices=['SGD', 'Adam'],
     help='Optimizer for fitting the model.')
@@ -143,6 +156,7 @@ def main():
     model_arch = results.model
     swa = results.swa
     lr_scheduler = results.lr_scheduler
+    loss = results.loss
 
     # set the number of channels for images to train
     if model_arch == 'UNet' or model_arch == 'UNet_2D':
@@ -163,7 +177,7 @@ def main():
     if model_arch == 'Res34Unetv5':
         img_size = 128
 
-    build_model(img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler)
+    build_model(img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler ,loss = loss)
 
 if __name__ == '__main__':
     main()
