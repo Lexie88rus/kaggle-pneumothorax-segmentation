@@ -6,6 +6,9 @@ https://discuss.pytorch.org/t/how-to-implement-soft-iou-loss/15152/5
 Paper:
 https://www.cs.umanitoba.ca/~ywang/papers/isvc16.pdf
 '''
+import torch
+from torch.nn import functional as F
+import torch.nn as nn
 
 def to_one_hot(tensor,nClasses):
 
@@ -40,4 +43,4 @@ class mIoULoss(nn.Module):
     	loss = inter/union
 
     	## Return average loss over classes and batch
-    	return - loss.mean()
+    	return 1 - loss.mean()

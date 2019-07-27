@@ -4,11 +4,10 @@ Source:
 https://github.com/kevinzakka/pytorch-goodies/blob/master/losses.py
 '''
 import torch
-import torch
 from torch.nn import functional as F
-from torch import nn
+import torch.nn as nn
 
-def jaccard_loss(true, logits, eps=1e-7):
+def jaccard_loss(true, logits, device, eps=1e-7):
     """Computes the Jaccard loss, a.k.a the IoU loss.
     Note that PyTorch optimizers minimize a loss. In this
     case, we would like to maximize the jaccard loss so we
@@ -35,7 +34,7 @@ def jaccard_loss(true, logits, eps=1e-7):
         true_1_hot = torch.eye(num_classes)[true.squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(probas, dim=1)
-    true_1_hot = true_1_hot.type(logits.type())
+    true_1_hot = true_1_hot.type(logits.type()).to(device)
     dims = (0,) + tuple(range(2, true.ndimension()))
     intersection = torch.sum(probas * true_1_hot, dims)
     cardinality = torch.sum(probas + true_1_hot, dims)
@@ -47,8 +46,10 @@ class JaccardLoss(nn.Module):
     '''
     Jaccard (IoU) loss
     '''
-    def __init__(self):
+    def __init__(self, device):
         super(JaccardLoss, self).__init__()
 
+        self.device = device
+
     def forward(self, input, target):
-        return jaccard_loss(target, input)
+        return jaccard_loss(target.long().to(self.device), input.to(self.device), self.device)

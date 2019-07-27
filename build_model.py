@@ -90,10 +90,10 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
         criterion = LovaszSoftmaxLoss()
 
     if loss == 'JaccardLoss':
-        criterion = JaccardLoss()
+        criterion = JaccardLoss(device = device)
 
     if loss == 'mIoULoss':
-        criterion = mIoULoss()
+        criterion = mIoULoss(n_classes = 1)
 
     metric = iou_score
 
