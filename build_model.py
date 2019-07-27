@@ -22,6 +22,8 @@ from models.vgg_unet import UNet11, AlbuNet, UNet16
 from models.unet_plusplus import NestedUNet
 from models.unet_deepsupervision import Unet_2D
 from models.phalanx import Res34Unetv4, Res34Unetv3, Res34Unetv5
+from models.unet_brain import brain_unet
+from models.att_unet import R2U_Net, AttU_Net, R2AttU_Net
 
 # Import losses
 from losses import BCEDiceLoss
@@ -40,6 +42,55 @@ from submission import determine_threshold, make_submission
 
 # Import model saving
 from save_model import save_model
+
+def build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss'):
+
+    # create data loaders
+    trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
+    test_split = test_split,
+    batch_size = batch_size,
+    num_workers = workers)
+
+    # setup the device
+    if device == None:
+        device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+
+    # restore model
+    model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(filename, channels = channels)
+
+    # setup criterion, optimizer and metrics
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    if loss == 'BCEDiceLoss':
+        criterion = BCEDiceLoss()
+
+    if loss == 'LovaszSoftmaxLoss':
+        criterion = LovaszSoftmaxLoss()
+
+    if loss == 'JaccardLoss':
+        criterion = JaccardLoss(device = device)
+
+    if loss == 'mIoULoss':
+        criterion = mIoULoss(n_classes = 1)
+
+    metric = iou_score
+
+    #train model
+    model, train_losses, test_losses, train_metrics, test_metrics = train(model, device, trainloader, testloader, optimizer, criterion, metric, epochs, learning_rate, swa = swa, enable_scheduler = enable_scheduler, model_arch = model_arch)
+
+    train_losses = train_losses + train_losses_0
+    test_losses = test_losses + test_losses_0
+    train_metrics = train_metrics + train_metrics_0
+    test_metrics = test_metrics + test_metrics_0
+
+    # create submission
+    filename = 'submission_' + model_arch + '_lr' + str(learning_rate) + '_' + str(epochs) + '.csv'
+    print('Generating submission to ' + filename + '\n')
+    thresholds, ious, index_max, threshold_max = determine_threshold(model, device, testloader, image_size = (img_size, img_size))
+    make_submission(filename, device, model, validloader, image_size = (img_size, img_size), threshold = threshold_max, original_size = 1024)
+
+    # save the model
+    save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = 'models_checkpoints')
 
 def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss'):
     # create data loaders
@@ -79,6 +130,18 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
 
     if model_arch == 'Res34Unetv5':
         model = Res34Unetv5()
+
+    if model_arch == 'BrainUNet':
+        model = brain_unet(pretrained = True)
+
+    if model_arch =='R2U_Net':
+        model = R2U_Net()
+
+    if model_arch == 'AttU_Net':
+        model = AttU_Net()
+
+    if model_arch == 'R2AttU_Net':
+        model = R2AttU_Net()
 
     # setup criterion, optimizer and metrics
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -129,7 +192,8 @@ def main():
                     help='Number of workers for training.')
 
     parser.add_argument('--model', action='store', default = 'UNet',
-    choices=['UNet', 'UNet11', 'AlbuNet', 'UNet16', 'NestedUNet', 'Unet_2D', 'Res34Unetv4', 'Res34Unetv3', 'Res34Unetv5'],
+    choices=['UNet', 'UNet11', 'AlbuNet', 'UNet16', 'NestedUNet', 'Unet_2D', 'Res34Unetv4', 'Res34Unetv3', 'Res34Unetv5',
+    'BrainUNet', 'R2U_Net', 'AttU_Net', 'R2AttU_Net'],
     help='Model architecture.')
 
     parser.add_argument('--loss', action='store', default = 'BCEDiceLoss',
@@ -165,13 +229,13 @@ def main():
         channels = 3
 
     # set the size of the images to train
-    if model_arch == 'UNet':
+    if model_arch == 'UNet' or model_arch =='R2U_Net' or model_arch == 'AttU_Net' or model_arch == 'R2AttU_Net':
         img_size = 224
 
     if model_arch == 'UNet11' or model_arch == 'UNet16' or model_arch == 'UNet_2D' or model_arch == 'NestedUNet':
         img_size = 224
 
-    if model_arch == 'AlbuNet' or model_arch == 'Res34Unetv4' or model_arch == 'Res34Unetv3':
+    if model_arch == 'AlbuNet' or model_arch == 'Res34Unetv4' or model_arch == 'Res34Unetv3' or model_arch == 'BrainUNet':
         img_size = 256
 
     if model_arch == 'Res34Unetv5':
