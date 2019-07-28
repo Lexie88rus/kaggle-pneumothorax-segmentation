@@ -22,9 +22,10 @@ def load_model(filename, channels = 3):
         filename - filename of the checkpoint containing saved model
         channels - number of image channels
     '''
-    checkpoint = torch.load(filepath)
+    checkpoint = torch.load(filename)
     model_arch = checkpoint['model_arch']
     train_losses = checkpoint['train_losses']
+    test_losses = checkpoint['test_losses']
     train_metrics = checkpoint['train_metrics']
     test_metrics = checkpoint['test_metrics']
 

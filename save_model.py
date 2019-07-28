@@ -1,6 +1,6 @@
 import torch
 
-def save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = './models_checkpoints/'):
+def save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = ''):
     """
     Functions to save the model checkpoint.
     """

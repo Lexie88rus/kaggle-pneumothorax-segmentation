@@ -43,6 +43,9 @@ from submission import determine_threshold, make_submission
 # Import model saving
 from save_model import save_model
 
+# Import model loading
+from load_model import load_model
+
 def build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss'):
 
     # create data loaders
