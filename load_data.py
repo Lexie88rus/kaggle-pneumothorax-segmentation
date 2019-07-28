@@ -51,7 +51,7 @@ def load_data(datafilepath = './', healthy_num = 2000):
 
     return train_fns, test_fns, df_masks, files_list
 
-def build_dataloaders(image_size, channels, test_split = .1, batch_size = 16, num_workers = 4):
+def build_dataloaders(image_size, channels, test_split = .1, batch_size = 16, num_workers = 4, all_data = False):
     '''
     Function to initialize train, test and validation sets and corresponding dataloaders.
     INPUT:
@@ -68,7 +68,10 @@ def build_dataloaders(image_size, channels, test_split = .1, batch_size = 16, nu
     height = image_size[1]
 
     # Load data
-    train_fns, test_fns, df_masks, files_list = load_data()
+    if all_data:
+        train_fns, test_fns, df_masks, files_list = load_data(healthy_num = 20000)
+    else:
+        train_fns, test_fns, df_masks, files_list = load_data(healthy_num = 2000)
 
     # Create dataset and data loader
     train_ds = PneumothoraxDataset(train_fns, df_masks, files_list, transform=True, size = (height, width), mode = 'train', channels = channels)

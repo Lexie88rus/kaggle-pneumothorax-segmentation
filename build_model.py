@@ -46,13 +46,14 @@ from save_model import save_model
 # Import model loading
 from load_model import load_model
 
-def build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss'):
+def build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss', all_data = False):
 
     # create data loaders
     trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
     test_split = test_split,
     batch_size = batch_size,
-    num_workers = workers)
+    num_workers = workers,
+    all_data = all_data)
 
     # setup the device
     if device == None:
@@ -95,12 +96,13 @@ def build_from_checkpoint(filename, device, img_size, channels, test_split, batc
     # save the model
     save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = 'models_checkpoints')
 
-def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss'):
+def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss', all_data = False):
     # create data loaders
     trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
     test_split = test_split,
     batch_size = batch_size,
-    num_workers = workers)
+    num_workers = workers,
+    all_data = all_data)
 
     # setup the device
     if device == None:
