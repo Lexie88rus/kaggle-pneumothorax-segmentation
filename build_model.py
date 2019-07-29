@@ -171,7 +171,7 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
     # create submission
     filename = 'submission_' + model_arch + '_lr' + str(learning_rate) + '_' + str(epochs) + '.csv'
     print('Generating submission to ' + filename + '\n')
-    thresholds, ious, index_max, threshold_max = determine_threshold(model, device, testloader, image_size = (img_size, img_size))
+    thresholds, ious, index_max, threshold_max = determine_threshold(model, device, testloader, image_size = (img_size, img_size), channels = channels)
     make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold_max, original_size = 1024, tta = tta)
 
     # save the model

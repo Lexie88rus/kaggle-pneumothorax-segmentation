@@ -101,13 +101,14 @@ def get_iou(p, t):
 
     return metric
 
-def determine_threshold(model, device, testloader, image_size):
+def determine_threshold(model, device, testloader, image_size, channels):
     '''
     Function to determine the best threshold for submission.
     INPUT:
         device - device used for computations
         testloader - loader for test dataset
         image_size - size of images for training
+        channels - the number of channels
     OUTPUT:
         thresholds - array of thresholds for submission
         ious - array of IOU for different threshold values
@@ -127,7 +128,7 @@ def determine_threshold(model, device, testloader, image_size):
                     input = inputs[i]
                     label = labels[i]
                     input, label = input.to(device), label.to(device)
-                    output = model.forward(input.reshape(-1, 1, im_width,im_height))
+                    output = model.forward(input.reshape(-1, channels, im_width,im_height))
                     mask = binary_opening(torch.sigmoid(output.reshape(im_width,im_height)).data.cpu().numpy() > threshold, disk(2))
                     iou += get_iou(mask.reshape(im_width,im_height), label.reshape(im_width,im_height).float().data.cpu().numpy())
             ious.append(iou / len(testloader))
