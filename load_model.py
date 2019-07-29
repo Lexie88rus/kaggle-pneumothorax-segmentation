@@ -15,14 +15,18 @@ from models.unet_plusplus import NestedUNet
 from models.unet_deepsupervision import Unet_2D
 from models.phalanx import Res34Unetv4, Res34Unetv3, Res34Unetv5
 
-def load_model(filename, channels = 3):
+def load_model(filename, device, channels = 3):
     '''
     Function loads the model from checkpoint
     INPUT:
         filename - filename of the checkpoint containing saved model
         channels - number of image channels
     '''
-    checkpoint = torch.load(filename)
+    if device == 'cpu':
+        checkpoint = torch.load(filename)
+    else:
+        checkpoint = torch.load(filename, map_location='cpu')
+
     model_arch = checkpoint['model_arch']
     train_losses = checkpoint['train_losses']
     test_losses = checkpoint['test_losses']

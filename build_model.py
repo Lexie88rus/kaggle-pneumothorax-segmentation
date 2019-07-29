@@ -46,7 +46,7 @@ from save_model import save_model
 # Import model loading
 from load_model import load_model
 
-def build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss', all_data = False):
+def build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss', all_data = False, tta = False):
 
     # create data loaders
     trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
@@ -60,7 +60,7 @@ def build_from_checkpoint(filename, device, img_size, channels, test_split, batc
         device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 
     # restore model
-    model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(filename, channels = channels)
+    model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(filename, device, channels = channels)
 
     # setup criterion, optimizer and metrics
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -91,12 +91,12 @@ def build_from_checkpoint(filename, device, img_size, channels, test_split, batc
     filename = 'submission_' + model_arch + '_lr' + str(learning_rate) + '_' + str(epochs) + '.csv'
     print('Generating submission to ' + filename + '\n')
     thresholds, ious, index_max, threshold_max = determine_threshold(model, device, testloader, image_size = (img_size, img_size))
-    make_submission(filename, device, model, validloader, image_size = (img_size, img_size), threshold = threshold_max, original_size = 1024)
+    make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold_max, original_size = 1024, tta = tta)
 
     # save the model
     save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = 'models_checkpoints')
 
-def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss', all_data = False):
+def build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa, enable_scheduler, loss = 'BCEDiceLoss', all_data = False, tta = False):
     # create data loaders
     trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
     test_split = test_split,
@@ -172,7 +172,7 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
     filename = 'submission_' + model_arch + '_lr' + str(learning_rate) + '_' + str(epochs) + '.csv'
     print('Generating submission to ' + filename + '\n')
     thresholds, ious, index_max, threshold_max = determine_threshold(model, device, testloader, image_size = (img_size, img_size))
-    make_submission(filename, device, model, validloader, image_size = (img_size, img_size), threshold = threshold_max, original_size = 1024)
+    make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold_max, original_size = 1024, tta = tta)
 
     # save the model
     save_model(model, model_arch, learning_rate, epochs, train_losses, test_losses, train_metrics, test_metrics, filepath = 'models_checkpoints')
@@ -215,6 +215,15 @@ def main():
     parser.add_argument('--lr_scheduler', action='store_true',
                         help='Enable learning rate scheduling (cosine annealing).')
 
+    parser.add_argument('--checkpoint', action='store', default = None,
+    help='Model checkpoint to load.')
+
+    parser.add_argument('--create_submission', action='store_true',
+                        help='Create submission from checkpoint.')
+
+    parser.add_argument('--tta', action='store_true',
+                        help='Use Test Time Augmentation.')
+
     results = parser.parse_args()
 
     learning_rate = results.learning_rate
@@ -226,6 +235,9 @@ def main():
     swa = results.swa
     lr_scheduler = results.lr_scheduler
     loss = results.loss
+    checkpoint_filepath = results.checkpoint
+    create_submission = results.create_submission
+    tta = results.tta
 
     # set the number of channels for images to train
     if model_arch == 'UNet' or model_arch == 'UNet_2D':
@@ -246,7 +258,34 @@ def main():
     if model_arch == 'Res34Unetv5':
         img_size = 128
 
-    build_model(img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler ,loss = loss)
+    if create_submission:
+
+        if checkpoint_filepath is None:
+            print('Filepath to saved model checkpoint should be specified.')
+            return
+
+        # setup the device
+        device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+
+        # restore model
+        model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(checkpoint_filepath, device, channels = channels)
+
+        # create data loaders
+        trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
+        test_split = test_split,
+        batch_size = batch_size,
+        num_workers = workers,
+        all_data = False,
+        data_filepath = '../siim-train-test/')
+
+        filename = 'submission.csv'
+
+        make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = 0.9, original_size = 1024, tta = tta)
+    else:
+        if checkpoint_filepath is not None:
+            build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler, loss = loss, all_data = False, tta = tta)
+        else:
+            build_model(img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler ,loss = loss, all_data = False, tta = tta)
 
 if __name__ == '__main__':
     main()

@@ -15,7 +15,10 @@ from PIL import Image
 # import mask utilities
 from mask_functions import mask2rle
 
-def make_submission(filename, device, model, validloader, image_size, threshold = 0.9, original_size = 1024):
+# import tta utilities
+from tta import get_prediction_with_tta
+
+def make_submission(filename, device, model, validloader, image_size, channels, threshold = 0.9, original_size = 1024, tta = False):
     '''
     Function to create submission.csv file.
     INPUT:
@@ -23,6 +26,7 @@ def make_submission(filename, device, model, validloader, image_size, threshold 
         model - model to create submission
         validloader - loader for validation dataset
         image_size - size of images for training
+        channels - number of channels in training images
         threshold - threshold for submission
         original_size - original image size (1024)
     '''
@@ -48,7 +52,12 @@ def make_submission(filename, device, model, validloader, image_size, threshold 
             mask_flipped = torch.sigmoid(output_flipped[i].reshape(im_width,im_height)).data.cpu().numpy()
             mask_flipped = binary_opening(mask_flipped > threshold, disk(2))
 
-            im = Image.fromarray(((mask + mask_flipped) / 2 * 255).astype(np.uint8)).resize((original_size,original_size))
+            if tta:
+                mask_tta = get_prediction_with_tta(model, X[i], device, img_size = (im_width,im_height), channels = channels)
+                im = Image.fromarray(((mask + mask_flipped + mask_tta) / 3 * 255).astype(np.uint8)).resize((original_size,original_size))
+            else:
+                im = Image.fromarray(((mask + mask_flipped) / 2 * 255).astype(np.uint8)).resize((original_size,original_size))
+
             im = np.transpose(np.asarray(im))
 
             submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
