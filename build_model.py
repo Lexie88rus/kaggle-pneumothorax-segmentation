@@ -222,7 +222,10 @@ def main():
                         help='Create submission from checkpoint.')
 
     parser.add_argument('--tta', action='store_true',
-                        help='Use Test Time Augmentation.')
+                        help='Enable Test Time Augmentation.')
+
+    parser.add_argument('--threshold', action='store_true',
+                        help='Find best threshold for mask.')
 
     results = parser.parse_args()
 
@@ -238,6 +241,7 @@ def main():
     checkpoint_filepath = results.checkpoint
     create_submission = results.create_submission
     tta = results.tta
+    find_threshold = results.threshold
 
     # set the number of channels for images to train
     if model_arch == 'UNet' or model_arch == 'UNet_2D':
@@ -280,7 +284,13 @@ def main():
 
         filename = 'submission.csv'
 
-        make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = 0.9, original_size = 1024, tta = tta)
+        if find_threshold:
+            thresholds, ious, index_max, threshold = determine_threshold(model, device, testloader, image_size = (img_size, img_size), channels = channels)
+            print('Threshold: {threshold} with {iou}\n'.format(threshold = threshold, iou = ious[index_max]))
+        else:
+            threshold = 0.9 # use default threshold for the submission
+
+        make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold, original_size = 1024, tta = tta)
     else:
         if checkpoint_filepath is not None:
             build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler, loss = loss, all_data = False, tta = tta)

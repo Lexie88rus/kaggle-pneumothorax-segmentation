@@ -15,8 +15,8 @@ def mask2rle(img, width, height):
                     runStart = currentPixel;
                     runLength = 1;
                 else:
-                    rle.append(str(runStart));
-                    rle.append(str(runLength));
+                    rle.append(runStart);
+                    rle.append(runLength);
                     runStart = -1;
                     runLength = 0;
                     currentPixel = 0;
@@ -25,7 +25,11 @@ def mask2rle(img, width, height):
             lastColor = currentColor;
             currentPixel+=1;
 
-    return " ".join(rle)
+    if lastColor == 255:
+        rle.append(runStart)
+        rle.append(runLength)
+
+    return " ".join(str(rle))
 
 def rle2mask(rle, width, height):
     mask= np.zeros(width* height)

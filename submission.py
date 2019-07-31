@@ -45,23 +45,32 @@ def make_submission(filename, device, model, validloader, image_size, channels, 
         X_flipped = torch.flip(X, dims = (3,))
         output_flipped = torch.flip(model(X_flipped), dims = (3,))
 
-        for i, fname in enumerate(fns):
-            mask = torch.sigmoid(output[i].reshape(im_width,im_height)).data.cpu().numpy()
-            mask = binary_opening(mask > threshold, disk(2))
+        if tta:
+            for i, fname in enumerate(fns):
+                mask = torch.sigmoid(output[i].reshape(im_width,im_height)).data.cpu().numpy()
+                mask = binary_opening(mask > threshold, disk(2))
 
-            mask_flipped = torch.sigmoid(output_flipped[i].reshape(im_width,im_height)).data.cpu().numpy()
-            mask_flipped = binary_opening(mask_flipped > threshold, disk(2))
+                mask_flipped = torch.sigmoid(output_flipped[i].reshape(im_width,im_height)).data.cpu().numpy()
+                mask_flipped = binary_opening(mask_flipped > threshold, disk(2))
 
-            if tta:
                 mask_tta = get_prediction_with_tta(model, X[i], device, img_size = (im_width,im_height), channels = channels)
                 im = Image.fromarray(((mask + mask_flipped + mask_tta) / 3 * 255).astype(np.uint8)).resize((original_size,original_size))
-            else:
-                im = Image.fromarray(((mask + mask_flipped) / 2 * 255).astype(np.uint8)).resize((original_size,original_size))
 
-            im = np.transpose(np.asarray(im))
+                im = np.transpose(np.asarray(im))
 
-            submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
-            submission['ImageId'].append(fname)
+                submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
+                submission['ImageId'].append(fname)
+        else:
+            for i, fname in enumerate(fns):
+                mask = torch.sigmoid(output[i].reshape(im_width,im_height)).data.cpu().numpy()
+                mask = binary_opening(mask > threshold, disk(2))
+
+                im = Image.fromarray((mask * 255).astype(np.uint8)).resize((original_size,original_size))
+
+                im = np.transpose(np.asarray(im))
+
+                submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
+                submission['ImageId'].append(fname)
 
     submission_df = pd.DataFrame(submission, columns=['ImageId', 'EncodedPixels'])
     submission_df.loc[submission_df.EncodedPixels=='', 'EncodedPixels'] = '-1'
