@@ -26,7 +26,7 @@ from models.unet_brain import brain_unet
 from models.att_unet import R2U_Net, AttU_Net, R2AttU_Net
 
 # Import losses
-from losses import BCEDiceLoss
+from losses import BCEDiceLoss, WeightedBCEDiceLoss
 from lovasz_loss import LovaszSoftmaxLoss
 from jaccard_loss import JaccardLoss
 from soft_IoU_loss import mIoULoss
@@ -76,6 +76,9 @@ def build_from_checkpoint(filename, device, img_size, channels, test_split, batc
 
     if loss == 'mIoULoss':
         criterion = mIoULoss(n_classes = 1)
+
+    if loss == 'WeightedBCEDiceLoss':
+        criterion = WeightedBCEDiceLoss()
 
     metric = iou_score
 
@@ -162,6 +165,9 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
 
     if loss == 'mIoULoss':
         criterion = mIoULoss(n_classes = 1)
+
+    if loss == 'WeightedBCEDiceLoss':
+        criterion = WeightedBCEDiceLoss()
 
     metric = iou_score
 
