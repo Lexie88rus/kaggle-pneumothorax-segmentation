@@ -105,7 +105,8 @@ def build_model(device, img_size, channels, test_split, batch_size, workers, mod
     test_split = test_split,
     batch_size = batch_size,
     num_workers = workers,
-    all_data = all_data)
+    all_data = all_data,
+    data_filepath = '../siim-train-test/')
 
     # setup the device
     if device == None:
@@ -268,14 +269,14 @@ def main():
     if model_arch == 'Res34Unetv5':
         img_size = 128
 
+    # setup the device
+    device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+
     if create_submission:
 
         if checkpoint_filepath is None:
             print('Filepath to saved model checkpoint should be specified.')
             return
-
-        # setup the device
-        device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 
         # restore model
         model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(checkpoint_filepath, device, channels = channels)
@@ -301,7 +302,7 @@ def main():
         if checkpoint_filepath is not None:
             build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler, loss = loss, all_data = False, tta = tta)
         else:
-            build_model(img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler ,loss = loss, all_data = False, tta = tta)
+            build_model(device, img_size, channels, test_split, batch_size, workers, model_arch, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler ,loss = loss, all_data = False, tta = tta)
 
 if __name__ == '__main__':
     main()
