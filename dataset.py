@@ -62,13 +62,22 @@ class PneumothoraxDataset(Dataset):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5], std=[0.5])])
 
-        self.alb_transforms = Compose([HorizontalFlip(p=0.5),
-                                             OneOf([RandomContrast(),
-                                                    RandomGamma(),
-                                                    RandomBrightness(),], p=0.3),
-                                             OneOf([ElasticTransform(alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-                                                    GridDistortion(),
-                                                    OpticalDistortion(distort_limit=2, shift_limit=0.5),], p=0.3)])
+        self.alb_transforms = Compose([
+            HorizontalFlip(p=0.5),
+            OneOf([
+                RandomContrast(),
+                RandomGamma(),
+                RandomBrightness(),
+            ], p=0.3),
+            OneOf([
+                ElasticTransform(alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+                GridDistortion(),
+                OpticalDistortion(distort_limit=2, shift_limit=0.5),
+            ], p=0.3),
+            RandomSizedCrop(min_max_height=(156, 224), height=self.size[0], width=self.size[1],p=0.25),
+            ToFloat(max_value=1)
+        ],p=1)
+
         self.mode = mode
         self.files_list = files_list
         self.channels = channels
@@ -114,6 +123,8 @@ class PneumothoraxDataset(Dataset):
         dataset = pydicom.read_file(self.files_list[idx])
         np_image = np.expand_dims(dataset.pixel_array, axis=2)
 
+        pneumothorax = False
+
         # load mask
         try:
             # no pneumothorax
@@ -127,6 +138,9 @@ class PneumothoraxDataset(Dataset):
                     np_mask = np.zeros((im_height, im_width, 1))
                     for x in self.labels_frame.loc[self.files_list[idx].split('/')[-1][:-4],' EncodedPixels']:
                         np_mask =  np_mask + np.expand_dims(rle2mask(x, im_height, im_width), axis=2)
+
+                pneumothorax = True
+
         except KeyError:
             # couldn't find mask in dataframe
             np_mask = np.zeros((im_height, im_width, 1), dtype=np.bool) # Assume missing masks are empty masks.

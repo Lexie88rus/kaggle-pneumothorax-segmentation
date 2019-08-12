@@ -69,8 +69,15 @@ def make_submission(filename, device, model, validloader, image_size, channels, 
 
                 im = np.transpose(np.asarray(im))
 
-                submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
-                submission['ImageId'].append(fname)
+                labels = label(im)
+                encodings = [mask2rle(labels == k, original_size, original_size) for k in np.unique(labels[labels > 0])]
+                if len(encodings) > 0:
+                    for encoding in encodings:
+                        submission['ImageId'].append(fname)
+                        submission['EncodedPixels'].append(encoding)
+                else:
+                    submission['ImageId'].append(fname)
+                    submission['EncodedPixels'].append('-1')
 
     submission_df = pd.DataFrame(submission, columns=['ImageId', 'EncodedPixels'])
     submission_df.loc[submission_df.EncodedPixels=='', 'EncodedPixels'] = '-1'
