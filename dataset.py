@@ -17,7 +17,7 @@ from albumentations import (
     RandomBrightness, RandomContrast, RandomGamma,OneOf,
     ToFloat, ShiftScaleRotate,GridDistortion, ElasticTransform, JpegCompression, HueSaturationValue,
     RGBShift, RandomBrightness, RandomContrast, Blur, MotionBlur, MedianBlur, GaussNoise,CenterCrop,
-    IAAAdditiveGaussianNoise,GaussNoise,OpticalDistortion
+    IAAAdditiveGaussianNoise,GaussNoise,OpticalDistortion,RandomSizedCrop
 )
 from albumentations.pytorch import ToTensor
 

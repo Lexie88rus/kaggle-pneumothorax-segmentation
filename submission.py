@@ -58,8 +58,15 @@ def make_submission(filename, device, model, validloader, image_size, channels, 
 
                 im = np.transpose(np.asarray(im))
 
-                submission['EncodedPixels'].append(mask2rle(im, original_size, original_size))
-                submission['ImageId'].append(fname)
+                labels = label(im)
+                encodings = [mask2rle(labels == k, original_size, original_size) for k in np.unique(labels[labels > 0])]
+                if len(encodings) > 0:
+                    for encoding in encodings:
+                        submission['ImageId'].append(fname)
+                        submission['EncodedPixels'].append(encoding)
+                else:
+                    submission['ImageId'].append(fname)
+                    submission['EncodedPixels'].append('-1')
         else:
             for i, fname in enumerate(fns):
                 mask = torch.sigmoid(output[i].reshape(im_width,im_height)).data.cpu().numpy()
@@ -208,7 +215,9 @@ def determine_threshold(model, device, testloader, image_size, channels):
                     input, label = input.to(device), label.to(device)
                     output = model.forward(input.reshape(-1, channels, im_width,im_height))
                     mask = binary_opening(torch.sigmoid(output.reshape(im_width,im_height)).data.cpu().numpy() > threshold, disk(2))
-                    iou += get_iou(mask.reshape(im_width,im_height), label.reshape(im_width,im_height).float().data.cpu().numpy())
+                    # add to metric only if pneumothorax if found so empty images don't add to metric
+                    if np.sum(mask) > 0:
+                        iou += get_iou(mask.reshape(im_width,im_height), label.reshape(im_width,im_height).float().data.cpu().numpy())
             ious.append(iou / len(testloader))
 
     index_max = np.argmax(ious)

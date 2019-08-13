@@ -234,6 +234,9 @@ def main():
     parser.add_argument('--threshold', action='store_true',
                         help='Find best threshold for mask.')
 
+    parser.add_argument('--sub_fname', type = str, action='store', default = 'submission.csv',
+                    help='Filename to save the submission.')
+
     results = parser.parse_args()
 
     learning_rate = results.learning_rate
@@ -249,6 +252,7 @@ def main():
     create_submission = results.create_submission
     tta = results.tta
     find_threshold = results.threshold
+    sub_fname = results.sub_fname
 
     # set the number of channels for images to train
     if model_arch == 'UNet' or model_arch == 'UNet_2D':
@@ -279,7 +283,7 @@ def main():
             return
 
         # restore model
-        model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(checkpoint_filepath, device, channels = channels)
+        model, model_arch, train_losses_0, test_losses_0, train_metrics_0, test_metrics_0 = load_model(checkpoint_filepath, device, channels = channels, model_architecture = model_arch)
 
         # create data loaders
         trainloader, testloader, validloader = build_dataloaders(image_size = (img_size, img_size), channels = channels,
@@ -289,15 +293,13 @@ def main():
         all_data = False,
         data_filepath = '../siim-train-test/')
 
-        filename = 'submission.csv'
-
         if find_threshold:
             thresholds, ious, index_max, threshold = determine_threshold(model, device, testloader, image_size = (img_size, img_size), channels = channels)
             print('Threshold: {threshold} with {iou}\n'.format(threshold = threshold, iou = ious[index_max]))
         else:
             threshold = 0.9 # use default threshold for the submission
 
-        make_submission(filename, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold, original_size = 1024, tta = tta)
+        make_submission(sub_fname, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold, original_size = 1024, tta = tta)
     else:
         if checkpoint_filepath is not None:
             build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler, loss = loss, all_data = False, tta = tta)
