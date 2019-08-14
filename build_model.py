@@ -39,6 +39,7 @@ from train import train
 
 # Import submission utilities
 from submission import determine_threshold, make_submission
+from test_model import test_model_submission
 
 # Import model saving
 from save_model import save_model
@@ -237,6 +238,9 @@ def main():
     parser.add_argument('--sub_fname', type = str, action='store', default = 'submission.csv',
                     help='Filename to save the submission.')
 
+    parser.add_argument('--sanity_check', action='store_true',
+                        help='Save images for submission sanity check.')
+
     results = parser.parse_args()
 
     learning_rate = results.learning_rate
@@ -253,6 +257,7 @@ def main():
     tta = results.tta
     find_threshold = results.threshold
     sub_fname = results.sub_fname
+    sanity_check = results.sanity_check
 
     # set the number of channels for images to train
     if model_arch == 'UNet' or model_arch == 'UNet_2D':
@@ -299,7 +304,10 @@ def main():
         else:
             threshold = 0.9 # use default threshold for the submission
 
-        make_submission(sub_fname, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold, original_size = 1024, tta = tta)
+        if sanity_check:
+            test_model_submission(sub_fname, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold, original_size = 1024)
+        else:
+            make_submission(sub_fname, device, model, validloader, image_size = (img_size, img_size), channels = channels, threshold = threshold, original_size = 1024, tta = tta)
     else:
         if checkpoint_filepath is not None:
             build_from_checkpoint(filename, device, img_size, channels, test_split, batch_size, workers, epochs, learning_rate, swa = swa, enable_scheduler = lr_scheduler, loss = loss, all_data = False, tta = tta)

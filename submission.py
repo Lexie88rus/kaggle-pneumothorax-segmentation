@@ -14,6 +14,7 @@ from PIL import Image
 
 # import mask utilities
 from mask_functions import mask2rle
+import pydicom
 
 # import tta utilities
 from tta import get_prediction_with_tta
@@ -60,31 +61,23 @@ def make_submission(filename, device, model, validloader, image_size, channels, 
 
                 labels = label(im)
                 encodings = [mask2rle(labels == k, original_size, original_size) for k in np.unique(labels[labels > 0])]
-                if len(encodings) > 0:
-                    for encoding in encodings:
-                        submission['ImageId'].append(fname)
-                        submission['EncodedPixels'].append(encoding)
-                else:
-                    submission['ImageId'].append(fname)
-                    submission['EncodedPixels'].append('-1')
+                fname = fname.split('/')[-1][:-4]
+                encoding = mask2rle(np.array(im), original_size, original_size)
+                submission['ImageId'].append(fname)
+                submission['EncodedPixels'].append(encoding)
         else:
             for i, fname in enumerate(fns):
                 mask = torch.sigmoid(output[i].reshape(im_width,im_height)).data.cpu().numpy()
                 mask = binary_opening(mask > threshold, disk(2))
+                mask = np.transpose(mask)
 
                 im = Image.fromarray((mask * 255).astype(np.uint8)).resize((original_size,original_size))
 
-                im = np.transpose(np.asarray(im))
+                fname = fname.split('/')[-1][:-4]
 
-                labels = label(im)
-                encodings = [mask2rle(labels == k, original_size, original_size) for k in np.unique(labels[labels > 0])]
-                if len(encodings) > 0:
-                    for encoding in encodings:
-                        submission['ImageId'].append(fname)
-                        submission['EncodedPixels'].append(encoding)
-                else:
-                    submission['ImageId'].append(fname)
-                    submission['EncodedPixels'].append('-1')
+                encoding = mask2rle(np.array(im), original_size, original_size)
+                submission['ImageId'].append(fname)
+                submission['EncodedPixels'].append(encoding)
 
     submission_df = pd.DataFrame(submission, columns=['ImageId', 'EncodedPixels'])
     submission_df.loc[submission_df.EncodedPixels=='', 'EncodedPixels'] = '-1'
@@ -215,6 +208,7 @@ def determine_threshold(model, device, testloader, image_size, channels):
                     input, label = input.to(device), label.to(device)
                     output = model.forward(input.reshape(-1, channels, im_width,im_height))
                     mask = binary_opening(torch.sigmoid(output.reshape(im_width,im_height)).data.cpu().numpy() > threshold, disk(2))
+                    #mask = torch.sigmoid(output.reshape(im_width,im_height)).data.cpu().numpy() > threshold
                     # add to metric only if pneumothorax if found so empty images don't add to metric
                     if np.sum(mask) > 0:
                         iou += get_iou(mask.reshape(im_width,im_height), label.reshape(im_width,im_height).float().data.cpu().numpy())

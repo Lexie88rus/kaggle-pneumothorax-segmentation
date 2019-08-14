@@ -74,8 +74,7 @@ class PneumothoraxDataset(Dataset):
                 GridDistortion(),
                 OpticalDistortion(distort_limit=2, shift_limit=0.5),
             ], p=0.3),
-            RandomSizedCrop(min_max_height=(156, 224), height=self.size[0], width=self.size[1],p=0.25),
-            ToFloat(max_value=1)
+            RandomSizedCrop(min_max_height=(156, 224), height=self.size[0], width=self.size[1],p=0.25)
         ],p=1)
 
         self.mode = mode
@@ -117,7 +116,7 @@ class PneumothoraxDataset(Dataset):
                 image = image.convert('RGB')
 
             image = self.transforms_image(image)
-            return [image, self.fns[idx].split('/')[-1][:-4]]
+            return [image, self.fns[idx]]
 
         # read dcm file with image
         dataset = pydicom.read_file(self.files_list[idx])
